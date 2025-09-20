@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Comparador IPC/CBA vs Precios de Mercado — 2025</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root{
+      --bg:#0b5cab;
+      --muted:#f4f6f8;
+      --ink:#0f172a;
+      --ok:#0ea5e9;
+      --warn:#ef4444;
+      --card:#ffffff;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial,"Noto Sans",sans-serif;color:var(--ink);background:#fafafa}
+    header{background:var(--bg);color:white;padding:24px 16px}
+    header h1{margin:0;font-size:clamp(20px,3.2vw,28px)}
+    header p{margin:.25rem 0 0;opacity:.9}
+    main{max-width:1100px;margin:0 auto;padding:20px}
+    .grid{display:grid;gap:16px}
+    @media(min-width:900px){.grid.cols-2{grid-template-columns:1fr 1fr}}
+    .card{background:var(--card);border-radius:14px;box-shadow:0 4px 14px rgba(2,8,20,.06);padding:16px}
+    .card h3{margin:.2rem 0 1rem;font-size:1.05rem}
+    .toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px}
+    .toolbar > *{margin-right:8px}
+    label{font-size:.9rem;opacity:.85}
+    select,input[type=file],button{border:1px solid #d9dee6;border-radius:10px;padding:8px 10px;background:white}
+    button{cursor:pointer}
+    .muted{color:#475569;font-size:.9rem}
+    .pill{display:inline-block;border-radius:999px;padding:4px 8px;background:var(--muted);font-size:.8rem;margin-right:6px}
+    table{width:100%;border-collapse:collapse;font-size:.92rem}
+    th,td{padding:8px;border-bottom:1px solid #eef1f4;text-align:right}
+    th:first-child,td:first-child,th:nth-child(2),td:nth-child(2){text-align:left}
+    thead th{background:var(--muted)}
+    .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:.5rem 0 0}
+    .kpi{background:var(--card);border:1px solid #e7ecf2;border-radius:12px;padding:12px}
+    .kpi .v{font-size:1.25rem;font-weight:700}
+    footer{margin:40px 0 20px;text-align:center;color:#6b7280;font-size:.85rem}
+    .small{font-size:.83rem}
+    .ok{color:var(--ok)} .warn{color:var(--warn)}
+    .inline-help{background:#eef6ff;border-left:3px solid var(--ok);padding:10px;border-radius:8px;font-size:.9rem}
+    .badge{display:inline-block;background:#e5f2ff;color:#0b5cab;padding:3px 8px;border-radius:999px;font-size:.75rem;margin-left:6px}
+    .sticky{position:sticky;top:8px}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Comparador IPC/CBA vs Precios de Mercado — 2025</h1>
+    <p>Visualizá la canasta básica alimentaria (CBA) / categorías del IPC y contrastalas con precios reales de hiper/super u otras fuentes abiertas.</p>
+  </header>
+
+  <main>
+    <div class="grid cols-2">
+      <section class="card sticky">
+        <h3>1) Cargar datos (opcional)</h3>
+        <div class="inline-help small">
+          Podés usar los <b>templates CSV</b> para cargar tus datos (INDEC y Mercado). Si no cargás nada, se usarán datos de <i>demo</i> para que la página funcione.
+          <div style="margin-top:6px">
+            <a href="oficial_template.csv" download>Descargar template oficial</a> · 
+            <a href="mercado_template.csv" download>Descargar template mercado</a>
+          </div>
+        </div>
+        <div class="toolbar" style="margin-top:10px">
+          <div>
+            <label>CSV Oficial (INDEC/CBA por artículo)</label><br/>
+            <input type="file" id="fileOficial" accept=".csv" />
+          </div>
+          <div>
+            <label>CSV Mercado (hiper/super, marcas/SKU)</label><br/>
+            <input type="file" id="fileMercado" accept=".csv" />
+          </div>
+        </div>
+
+        <h3 style="margin-top:18px">2) Filtros</h3>
+        <div class="toolbar">
+          <div>
+            <label>Categoría</label><br/>
+            <select id="categoryFilter"></select>
+          </div>
+          <div>
+            <label>Artículo</label><br/>
+            <select id="productFilter"></select>
+          </div>
+          <div>
+            <label>Marca/SKU (mercado)</label><br/>
+            <select id="skuFilter"></select>
+          </div>
+          <div>
+            <label>Ver</label><br/>
+            <select id="viewMode">
+              <option value="level">Niveles (ARS)</option>
+              <option value="gap">Brecha % (Mercado vs Oficial)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="kpis">
+          <div class="kpi">
+            <div class="small muted">Promedio brecha YTD</div>
+            <div class="v" id="avgGap">–</div>
+          </div>
+          <div class="kpi">
+            <div class="small muted">Máxima brecha (mes)</div>
+            <div class="v" id="maxGap">–</div>
+          </div>
+          <div class="kpi">
+            <div class="small muted">Diferencia absoluta promedio (ARS)</div>
+            <div class="v" id="avgAbs">–</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h3>Serie mensual 2025 — seleccionado</h3>
+        <canvas id="itemChart" height="130"></canvas>
+        <div class="muted small" style="margin-top:8px">
+          Consejo: cambiá “Marca/SKU” para ver cómo varían las brechas según proveedor o comercio.
+        </div>
+      </section>
+    </div>
+
+    <section class="card" style="margin-top:16px">
+      <h3>Tabla comparativa (enero → diciembre 2025)</h3>
+      <div class="muted small">Muestra niveles oficiales vs mercado y brecha por mes. Los meses no provistos en el CSV se dejarán en blanco.</div>
+      <div style="overflow:auto;margin-top:10px">
+        <table id="cmpTable"></table>
+      </div>
+    </section>
+
+    <section class="card" style="margin-top:16px">
+      <h3>Visión general — CBA oficial vs Mercado (placeholder)</h3>
+      <div class="muted small">Este gráfico resume una comparación general (puede reemplazarse por tu serie agregada real cuando dispongas de los datos completos).</div>
+      <canvas id="overviewChart" height="110"></canvas>
+    </section>
+
+    <footer>
+      Hecho para análisis ciudadano y transparencia. Cargá tus datos reales para auditar y enriquecer la comparación.
+    </footer>
+  </main>
+
+<script>
+// =====================
+// Utilidades
+// =====================
+const MONTHS = ["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"];
+const monthLabel = m => {
+  const map = {"01":"Ene","02":"Feb","03":"Mar","04":"Abr","05":"May","06":"Jun","07":"Jul","08":"Ago","09":"Sep","10":"Oct","11":"Nov","12":"Dic"};
+  return map[m.slice(-2)] || m;
+};
+function parseCSV(text){
+  const rows = text.trim().split(/\r?\n/).map(r=>r.split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map(c=>c.replace(/^"|"$/g,'')));
+  const header = rows.shift();
+  return rows.map(r=>Object.fromEntries(header.map((h,i)=>[h.trim(), r[i]!==undefined?r[i].trim():""])));
+}
+function toMoney(x){ return (x==null || x==='') ? "" : new Intl.NumberFormat('es-AR',{style:"currency",currency:"ARS",maximumFractionDigits:0}).format(+x); }
+function pct(a,b){ // pct gap of market vs official: (m/o -1)*100
+  if(a==null || a==="" || b==null || b==="") return "";
+  if(+b===0) return "";
+  return ((+a/+b - 1) * 100);
+}
+function avg(arr){ const v = arr.filter(x=>Number.isFinite(x)); return v.length? v.reduce((a,b)=>a+b,0)/v.length : NaN; }
+function maxWithIndex(arr){ let mi=-Infinity, idx=-1; arr.forEach((v,i)=>{ if(Number.isFinite(v) && v>mi){mi=v; idx=i;} }); return {max:mi, idx}; }
+
+// =====================
+// Datos DEMO (se reemplazan al cargar CSVs)
+// =====================
+let OFICIAL = [
+  {product_code:"LEC1", product_name:"Leche entera 1L", category:"Lácteos",
+   "2025-01":980,"2025-02":990,"2025-03":1050,"2025-04":1060,"2025-05":1055,"2025-06":1080,"2025-07":1100,"2025-08":1110},
+  {product_code:"PAN1", product_name:"Pan francés 1kg", category:"Panificación",
+   "2025-01":1800,"2025-02":1900,"2025-03":2000,"2025-04":2040,"2025-05":2050,"2025-06":2100,"2025-07":2150,"2025-08":2170},
+  {product_code:"ARR1", product_name:"Arroz largo fino 1kg", category:"Almacén",
+   "2025-01":1450,"2025-02":1480,"2025-03":1500,"2025-04":1515,"2025-05":1520,"2025-06":1550,"2025-07":1570,"2025-08":1585}
+];
+let MERCADO = [
+  {product_code:"LEC1", product_name:"Leche entera 1L", brand:"LaVaquita", sku:"LVQ-1L", store:"HiperUno", category:"Lácteos",
+   "2025-01":1020,"2025-02":1010,"2025-03":1080,"2025-04":1100,"2025-05":1120,"2025-06":1140,"2025-07":1160,"2025-08":1185},
+  {product_code:"LEC1", product_name:"Leche entera 1L", brand:"Colonia", sku:"COL-1L", store:"SuperMax", category:"Lácteos",
+   "2025-01":1000,"2025-02":1005,"2025-03":1060,"2025-04":1070,"2025-05":1090,"2025-06":1115,"2025-07":1130,"2025-08":1145},
+  {product_code:"PAN1", product_name:"Pan francés 1kg", brand:"PanBello", sku:"PBL-1K", store:"HiperUno", category:"Panificación",
+   "2025-01":1900,"2025-02":1950,"2025-03":2060,"2025-04":2120,"2025-05":2140,"2025-06":2180,"2025-07":2250,"2025-08":2290},
+  {product_code:"ARR1", product_name:"Arroz largo fino 1kg", brand:"Pampa", sku:"PAM-1K", store:"SuperMax", category:"Almacén",
+   "2025-01":1500,"2025-02":1510,"2025-03":1540,"2025-04":1560,"2025-05":1580,"2025-06":1600,"2025-07":1630,"2025-08":1650}
+];
+
+// =====================
+// UI poblado inicial
+// =====================
+const $cat = document.getElementById('categoryFilter');
+const $prod = document.getElementById('productFilter');
+const $sku = document.getElementById('skuFilter');
+const $view = document.getElementById('viewMode');
+const $avgGap = document.getElementById('avgGap');
+const $maxGap = document.getElementById('maxGap');
+const $avgAbs = document.getElementById('avgAbs');
+let itemChart, overviewChart;
+
+function unique(xs){ return [...new Set(xs)]; }
+function currentMonthsAvailable(data){
+  // count max months present among rows
+  let seen = new Set();
+  data.forEach(r=>MONTHS.forEach(m=>{ if(r[m]!=null && r[m]!=="" ) seen.add(m) }));
+  return MONTHS.filter(m=>seen.has(m));
+}
+function refreshFilters(){
+  const cats = unique([...OFICIAL.map(x=>x.category)]).sort();
+  $cat.innerHTML = ['<option value="__ALL__">Todas</option>', ...cats.map(c=>`<option>${c}</option>`)].join('');
+  const prods = OFICIAL.filter(x=>$cat.value==='__ALL__' || x.category===$cat.value);
+  $prod.innerHTML = prods.map(x=>`<option value="${x.product_code}">${x.product_name}</option>`).join('');
+  refreshSku();
+}
+function refreshSku(){
+  const code = $prod.value;
+  const skus = MERCADO.filter(x=>x.product_code===code);
+  $sku.innerHTML = skus.map((x,i)=>`<option value="${x.sku}">${x.brand} · ${x.store} (${x.sku})</option>`).join('');
+  if(!$sku.value && skus[0]) $sku.value = skus[0].sku;
+  drawItem();
+  drawTable();
+}
+function monthsToLabels(ms){ return ms.map(m=>monthLabel(m.slice(-2))); }
+
+function drawItem(){
+  const code = $prod.value;
+  const oficial = OFICIAL.find(x=>x.product_code===code);
+  const skuRow = MERCADO.find(x=>x.product_code===code && x.sku===$sku.value) || MERCADO.find(x=>x.product_code===code);
+  const months = currentMonthsAvailable([oficial, skuRow]);
+  const oSeries = months.map(m=> Number(oficial?.[m]) || null);
+  const mSeries = months.map(m=> Number(skuRow?.[m]) || null);
+  const labels = monthsToLabels(months);
+
+  const ctx = document.getElementById('itemChart').getContext('2d');
+  if(itemChart) itemChart.destroy();
+
+  const showGap = $view.value==='gap';
+  const data1 = showGap ? months.map((_,i)=> pct(mSeries[i], oSeries[i])) : oSeries;
+  const data2 = showGap ? months.map(()=>null) : mSeries;
+
+  itemChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: showGap ? 'Brecha % (Mercado vs Oficial)' : 'Oficial (INDEC/CBA)',
+          data: data1,
+          tension:.25,
+          pointRadius:3
+        },
+        ...(!showGap? [{
+          label: 'Mercado (marca/SKU seleccionado)',
+          data: data2,
+          tension:.25,
+          pointRadius:3
+        }] : [])
+      ]
+    },
+    options: {
+      responsive:true,
+      maintainAspectRatio:false,
+      scales:{
+        y: { ticks:{ callback: function(value){ return showGap ? value + '%' : new Intl.NumberFormat('es-AR', {style:'currency', currency:'ARS', maximumFractionDigits:0}).format(value); } } }
+      },
+      plugins:{
+        tooltip:{
+          callbacks:{
+            label: function(ctx){
+              const v = ctx.raw;
+              if(v==null || v==='') return '';
+              return $view.value==='gap' ? ` ${v.toFixed(1)}%` : ` ${toMoney(v)}`;
+            }
+          }
+        }
+      }
+    }
+  });
+
+  // KPIs
+  const gaps = months.map((_,i)=> pct(mSeries[i],oSeries[i]));
+  const abs = months.map((_,i)=> (Number.isFinite(mSeries[i]) && Number.isFinite(oSeries[i])) ? (mSeries[i]-oSeries[i]) : NaN);
+  const avgGapVal = avg(gaps);
+  const {max, idx} = maxWithIndex(gaps);
+  const avgAbsVal = avg(abs);
+  $avgGap.textContent = Number.isFinite(avgGapVal) ? (avgGapVal>0?'+':'') + avgGapVal.toFixed(1)+'%' : '–';
+  $maxGap.textContent = Number.isFinite(max) ? max.toFixed(1)+'% ('+ (months[idx]? monthLabel(months[idx].slice(-2)):'–') +')' : '–';
+  $avgAbs.textContent = Number.isFinite(avgAbsVal) ? toMoney(avgAbsVal) : '–';
+}
+
+function drawTable(){
+  const code = $prod.value;
+  const oficial = OFICIAL.find(x=>x.product_code===code);
+  const skuRow = MERCADO.find(x=>x.product_code===code && x.sku===$sku.value) || MERCADO.find(x=>x.product_code===code);
+
+  let html = '<thead><tr><th>Mes</th><th>Concepto</th>'+MONTHS.map(m=>`<th>${monthLabel(m.slice(-2))}</th>`).join('')+'</tr></thead><tbody>';
+  html += '<tr><td rowspan="3">2025</td><td>Oficial</td>' + MONTHS.map(m=>`<td>${toMoney(oficial?.[m])}</td>`).join('') + '</tr>';
+  html += '<tr><td>Mercado</td>' + MONTHS.map(m=>`<td>${toMoney(skuRow?.[m])}</td>`).join('') + '</tr>';
+  html += '<tr><td>Brecha %</td>' + MONTHS.map(m=>{
+    const p = pct(skuRow?.[m], oficial?.[m]);
+    return `<td class="${Number.isFinite(p) && p>0 ? 'warn' : 'ok'}">${(p===''? '': p.toFixed(1)+'%')}</td>`;
+  }).join('') + '</tr>';
+  html += '</tbody>';
+  document.getElementById('cmpTable').innerHTML = html;
+}
+
+function drawOverview(){
+  const ctx = document.getElementById('overviewChart').getContext('2d');
+  if(overviewChart) overviewChart.destroy();
+  // Construimos una serie "general" por demo: promedio ponderado simple de 3 items
+  const months = currentMonthsAvailable(OFICIAL);
+  const o = months.map(m=> avg(OFICIAL.map(r=>+r[m]||NaN)));
+  const m = months.map(m=> avg(MERCADO.map(r=>+r[m]||NaN)));
+  overviewChart = new Chart(ctx, {
+    type:'line',
+    data:{
+      labels: monthsToLabels(months),
+      datasets:[
+        {label:'CBA/Oficial (promedio items demo)', data:o, tension:.25, pointRadius:2},
+        {label:'Mercado (promedio items demo)', data:m, tension:.25, pointRadius:2}
+      ]
+    },
+    options:{responsive:true,maintainAspectRatio:false}
+  });
+}
+
+// =====================
+// Carga de CSVs
+// =====================
+document.getElementById('fileOficial').addEventListener('change', (e)=>{
+  const f = e.target.files[0]; if(!f) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    const rows = parseCSV(reader.result);
+    // Validación mínima: debe tener product_code/product_name/category
+    OFICIAL = rows.map(r=>r);
+    refreshFilters();
+    drawOverview();
+  };
+  reader.readAsText(f, 'utf-8');
+});
+document.getElementById('fileMercado').addEventListener('change', (e)=>{
+  const f = e.target.files[0]; if(!f) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    const rows = parseCSV(reader.result);
+    MERCADO = rows.map(r=>r);
+    refreshSku();
+    drawOverview();
+  };
+  reader.readAsText(f, 'utf-8');
+});
+
+// Eventos
+$cat.addEventListener('change', refreshFilters);
+$prod.addEventListener('change', refreshSku);
+$sku.addEventListener('change', ()=>{ drawItem(); drawTable(); });
+$view.addEventListener('change', drawItem);
+
+// Init
+refreshFilters();
+drawItem();
+drawTable();
+drawOverview();
+</script>
+</body>
+</html>
